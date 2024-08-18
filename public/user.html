@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold mb-4">User Page</h1>
+        <div id="game-info" class="mb-4">
+            <div id="game-time-info" class="bg-blue-100 p-4 rounded">
+                <p id="next-game-time">Next Game Time: </p>
+                <p id="time-left">Time Left: </p>
+            </div>
+        <div id="game-board" class="hidden">
+            <!-- Game board will be dynamically inserted here -->
+        </div>
+        <div id="called-numbers" class="mt-4">
+            <p>Called Numbers:</p>
+            <div id="numbers-list"></div>
+        </div>
+    </div>
+    <div id="ticket-container"></div>
+        </div>
+    <script>
+        const ws = new WebSocket('ws://localhost:3000');
+        let gameInterval;
+
+        ws.onopen = () => {
+            console.log('WebSocket connection established');
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'UPDATE_STATE') {
+                updateGameState(data.state);
+            }
+        };
+
+        function updateGameState(state) {
+            if (state.isRunning) {
+                document.getElementById('game-board').style.display = 'block';
+                updateGameBoard(state);
+                updateCalledNumbers(state.calledNumbers);
+                updateTickets(state.tickets);
+                if (gameInterval) clearInterval(gameInterval);
+                // Set a timer to announce the next number
+                gameInterval = setInterval(() => announceNextNumber(state.calledNumbers), 1000);
+            } else {
+                document.getElementById('game-board').style.display = 'none';
+                if (gameInterval) clearInterval(gameInterval);
+            }
+
+            if (state.gameTime) {
+                document.getElementById('game-time-info').style.display = 'block';
+                document.getElementById('next-game-time').textContent = `Next Game Time: ${state.gameTime}`;
+                const endTime = new Date(state.gameTime).getTime();
+                const now = new Date().getTime();
+                const timeLeft = endTime - now;
+                if (timeLeft > 0) {
+                    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+                    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+                    document.getElementById('time-left').textContent = `Time Left: ${hours}h ${minutes}m ${seconds}s`;
+                } else {
+                    document.getElementById('time-left').textContent = 'Game has started!';
+                }
+            } else {
+                document.getElementById('game-time-info').style.display = 'none';
+            }
+        }
+
+        function updateGameBoard(state) {
+            const board = document.getElementById('game-board');
+            board.innerHTML = ''; // Clear previous board
+            const table = document.createElement('table');
+            table.className = 'table-auto border-separate border-spacing-2';
+
+            for (let row = 0; row < 9; row++) {
+                const tr = document.createElement('tr');
+                for (let col = 0; col < 10; col++) {
+                    const td = document.createElement('td');
+                    const num = row * 10 + col + 1;
+                    td.textContent = num;
+                    td.className = 'border px-2 py-1';
+                    if (state.calledNumbers.includes(num)) {
+                        td.classList.add('bg-yellow-300');
+                    }
+                    tr.appendChild(td);
+                }
+                table.appendChild(tr);
+            }
+
+            board.appendChild(table);
+        }
+
+        function updateCalledNumbers(calledNumbers) {
+            const numbersList = document.getElementById('numbers-list');
+            numbersList.innerHTML = ''; // Clear previous numbers
+
+            const row = document.createElement('div');
+            row.className = 'flex flex-wrap';
+
+            calledNumbers.forEach((num, index) => {
+                const span = document.createElement('span');
+                span.textContent = num;
+                span.className = 'bg-gray-200 p-1 m-1 rounded';
+                if (index > 0 && index % 25 === 0) {
+                    numbersList.appendChild(row);
+                    row = document.createElement('div');
+                    row.className = 'flex flex-wrap';
+                }
+                row.appendChild(span);
+            });
+
+            numbersList.appendChild(row);
+        }
+
+        function updateTickets(tickets) {
+            const ticketContainer = document.getElementById('ticket-container');
+            ticketContainer.innerHTML = ''; // Clear previous tickets
+
+            tickets.forEach(ticket => {
+                const div = document.createElement('div');
+                div.className = 'border p-2 mb-2';
+                div.innerHTML = `
+                    <p>Ticket ID: ${ticket.id} ${ticket.name ? '- Booked by ' + ticket.name : '<a href="https://wa.me/9999999999" class="text-blue-500">Book Now</a>'}</p>
+                    <table class="table-auto border-collapse border border-gray-300">
+                        ${ticket.grid.map(row => `
+                            <tr>
+                                ${row.map(num => `<td class="border px-2 py-1 ${num ? 'bg-gray-200' : ''}">${num || ''}</td>`).join('')}
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+                ticketContainer.appendChild(div);
+            });
+        }
+
+        function announceNextNumber(calledNumbers) {
+            // Simulate voice announcement of the next number
+            if (calledNumbers.length > 0) {
+                const nextNumber = calledNumbers[calledNumbers.length - 1];
+                const utterance = new SpeechSynthesisUtterance(nextNumber);
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+    </script>
+</body>
+</html>
